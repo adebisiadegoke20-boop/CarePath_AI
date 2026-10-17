@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 pydantic
 python-dotenv
@@ -8,3 +8,5 @@ groq
 supabase
 requests
 httpx
+torch --index-url https://download.pytorch.org/whl/cpu
+sentence-transformers
