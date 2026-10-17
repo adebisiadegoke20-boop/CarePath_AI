@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-10-15T09:06:25.890980+00:00",
+  "sources": [
+    {
+      "id": "who_anc_guideline",
+      "title": "WHO Recommendations on Antenatal Care for a Positive Pregnancy Experience",
+      "kind": "pdf",
+      "sha256": "338300b76172d410b91048209305fac53e1166c3be295a18b3f2c0c7c6b54182",
+      "filename": "who_antenatal_care_guideline.pdf",
+      "use": "Primary international ANC reference; check WHO updates before clinical use.",
+      "extracted_at": "2026-10-15T09:06:25.896655+00:00",
+      "total_pages": 168,
+      "processed_file": "who_anc_guideline.txt"
+    },
+    {
+      "id": "nigeria_basic_newborn_care",
+      "title": "Nigeria National Guideline for Basic Newborn Care (November 2021)",
+      "kind": "pdf",
+      "sha256": "6d4545d53c159d96ec0241ad95838dd58f7d2565b1da9f1e33be21fafe0d8e02",
+      "filename": "nigeria_national_guideline_basic_newborn_care.pdf",
+      "use": "Nigerian community/PHC newborn-care guidance with an antenatal-care chapter; not a complete standalone ANC guideline.",
+      "extracted_at": "2026-10-15T09:06:29.122744+00:00",
+      "total_pages": 97,
+      "processed_file": "nigeria_basic_newborn_care.txt"
+    },
+    {
+      "id": "tci_anc_eight_contacts",
+      "title": "The Challenge Initiative: Eight ANC Contacts Protocol",
+      "kind": "pdf",
+      "sha256": "4fa3c8fa35df359c1b27ac9e94f40066dd3d5dd642ce822a5c8912e3ae4f8b55",
+      "filename": "tci_eight_anc_contacts_protocol.pdf",
+      "use": "Operational reference for the eight-contact ANC model; verify local applicability.",
+      "extracted_at": "2026-10-15T09:06:30.207157+00:00",
+      "total_pages": 8,
+      "processed_file": "tci_anc_eight_contacts.txt"
+    }
+  ]
+}

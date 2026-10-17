@@ -1,0 +1,20 @@
+# Environment variables & secrets
+.env
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Operating System generated junk files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Logs
+*.log

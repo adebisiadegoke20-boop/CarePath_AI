@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+python-dotenv
+twilio
+groq
+supabase
+requests
+httpx
