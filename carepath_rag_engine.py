@@ -2,13 +2,12 @@ import os
 import re
 from dotenv import load_dotenv
 from supabase import create_client
-from sentence_transformers import SentenceTransformer
 from groq import Groq
 
 load_dotenv()
 
 # ============================================================
-# INITIALIZATION & CONNECTIONS
+# INITIALIZATION & LAZY CONNECTIONS
 # ============================================================
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -19,13 +18,20 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise ValueError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in environment.")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-groq_client = Groq(api_key=GROQ_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-print("System Initialized")
-print("Connected to Supabase")
-print("Embedding Model Loaded (all-MiniLM-L6-v2)")
-print("Groq Client Ready (openai/gpt-oss-120b)")
+# Singleton for lazy loading heavy embedding model
+_embedding_model = None
+
+def get_embedding_model():
+    """Lazy loads SentenceTransformer to prevent slow server startup & port timeouts."""
+    global _embedding_model
+    if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedding_model
+
+print("System Initialized (Connected to Supabase & Groq)")
 
 
 # ============================================================
@@ -66,11 +72,12 @@ def ingest_document(title, content, source):
     print("Ingesting:", title)
     print("-" * 40)
 
+    model = get_embedding_model()
     chunks = chunk_text(content)
     stored = 0
 
     for i, chunk in enumerate(chunks):
-        embedding = embedding_model.encode(chunk).tolist()
+        embedding = model.encode(chunk).tolist()
 
         try:
             supabase.table("carepath_documents").insert({
@@ -95,14 +102,15 @@ def ingest_document(title, content, source):
 
 def rag_search(question, top_k=5):
     """Queries vector embeddings via Supabase RPC function match_carepath_documents."""
-    query_embedding = embedding_model.encode(question).tolist()
+    model = get_embedding_model()
+    query_embedding = model.encode(question).tolist()
 
     try:
         results = supabase.rpc(
             "match_carepath_documents",
             {
                 "query_embedding": query_embedding,
-                "match_threshold": 0.0,  # <-- CHANGED FROM 0.15 TO 0.0
+                "match_threshold": 0.0,
                 "match_count": top_k
             }
         ).execute()
@@ -111,6 +119,7 @@ def rag_search(question, top_k=5):
     except Exception as err:
         print(f"Vector search failed: {err}")
         return []
+
 
 def rag_generate(question, documents):
     """Generates structured response using Groq (openai/gpt-oss-120b)."""
@@ -133,7 +142,7 @@ Answer questions based ONLY on the provided clinical documents (WHO ANC Guidelin
 Strict Operating Rules:
 1. If the answer cannot be derived from the documents, respond: "I don't have enough information in the provided documents."
 2. Never hallucinate or assume facts outside the provided document text.
-3. Cite sources explicitly using.
+3. Cite sources explicitly.
 4. For emergencies, explicitly advise visiting the OB/GYN Department at Garki Hospital Abuja immediately.
 """
 
