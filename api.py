@@ -1,4 +1,5 @@
 import os
+import uvicorn
 from fastapi import FastAPI, Form, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from twilio.twiml.messaging_response import MessagingResponse
@@ -87,3 +88,7 @@ async def web_chat_endpoint(payload: ChatRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    server_port: int = int(os.environ.get("PORT", "10000"))
+    uvicorn.run("api:app", host="0.0.0.0", port=server_port)
