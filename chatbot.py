@@ -207,8 +207,7 @@ def handle_user_message(question):
             "agent": agent.name,
             "reply": result["response"]
         }
-
-    # --------------------------------------------------------
+# --------------------------------------------------------
     # OUTPUT GUARD
     # --------------------------------------------------------
     output_check = OutputGuard.validate(result["response"])
@@ -223,11 +222,20 @@ def handle_user_message(question):
     print("\nRESPONSE")
     print(result["response"])
 
+    # Extract just the recommendation if the response contains structured clinical tags
+    raw_text = result["response"]
+    clean_reply = raw_text
+    
+    if "- Recommendation:" in raw_text:
+        parts = raw_text.split("- Recommendation:")
+        if len(parts) > 1:
+            clean_reply = parts[1].strip()
+
     return {
         "status": "success",
         "category": category,
         "agent": agent.name,
-        "reply": result["response"]
+        "reply": clean_reply
     }
 
 
