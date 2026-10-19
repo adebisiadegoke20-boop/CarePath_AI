@@ -23,15 +23,11 @@ def triage_agent(question):
         return {"success": False, "response": result["error"]}
     
     triage_data = result["triage_result"]
-    formatted_reply = (
-        f"**Triage Assessment**\n"
-        f"- Urgency: {triage_data.get('urgency', 'routine').upper()}\n"
-        f"- Pathway: {triage_data.get('pathway', 'hospital')}\n"
-        f"- Reasoning: {triage_data.get('reasoning', '')}\n"
-        f"- Recommendation: {triage_data.get('recommendation', '')}"
-    )
-    return {"success": True, "response": formatted_reply}
-
+    
+    # Return ONLY the clean recommendation text to the patient chat
+    clean_recommendation = triage_data.get('recommendation', 'Please visit Garki Hospital Abuja OB/GYN Department.')
+    
+    return {"success": True, "response": clean_recommendation}
 
 def appointment_agent(question):
     """Handles Garki Hospital OB/GYN appointment booking inquiries."""
