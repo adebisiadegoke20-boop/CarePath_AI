@@ -36,15 +36,19 @@ class ChatRequest(BaseModel):
     language: Optional[str] = "en"  # Language option (en, ha, yo, ig, pcm)
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
-    """Health check endpoint for Render deployment."""
     return {
         "system": "CarePath",
         "hospital": "Garki Hospital Abuja",
         "department": "OB/GYN Clinical Triage & Patient Communication",
         "status": "Online & Operational"
     }
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
 
 
 @app.post("/sms")
