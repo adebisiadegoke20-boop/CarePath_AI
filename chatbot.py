@@ -11,6 +11,44 @@ from appointment_booking import AppointmentBooking
 load_dotenv()
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
+# Language mappings for patient response translation
+LANGUAGE_NAMES = {
+    "ha": "Hausa",
+    "yo": "Yoruba",
+    "ig": "Igbo",
+    "pcm": "Nigerian Pidgin English",
+    "en": "English"
+}
+
+
+def translate_response(text: str, target_language_code: str) -> str:
+    """
+    Translates the final clinical recommendation into the patient's selected language.
+    """
+    if not target_language_code or target_language_code == "en" or target_language_code not in LANGUAGE_NAMES:
+        return text
+
+    target_lang_name = LANGUAGE_NAMES[target_language_code]
+
+    prompt = f"""You are an empathetic medical translator at Garki Hospital Abuja.
+Translate the following clinical guidance into clear, natural, and accessible {target_lang_name}.
+Keep medical terms easy to understand for the patient. Return ONLY the translated text without extra conversational filler.
+
+Text to translate:
+"{text}"
+"""
+
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Translation Error ({target_lang_name}):", str(e))
+        return text
+
 
 # ============================================================
 # INDIVIDUAL AGENT HANDLERS
@@ -23,23 +61,30 @@ def triage_agent(question):
         return {"success": False, "response": result["error"]}
     
     triage_data = result["triage_result"]
-    
-    # Return ONLY the clean recommendation text to the patient chat
     clean_recommendation = triage_data.get('recommendation', 'Please visit Garki Hospital Abuja OB/GYN Department.')
-    
     return {"success": True, "response": clean_recommendation}
+
 
 def appointment_agent(question):
     """Handles Garki Hospital OB/GYN appointment booking inquiries."""
-    # Uses RAG to answer booking policies or guides the patient
     rag_res = full_rag(question)
-    return {"success": True, "response": rag_res["answer"]}
+    answer = rag_res.get("answer", "")
+    
+    if not answer or "don't have enough information" in answer.lower():
+        answer = "To inquire about or schedule an OB/GYN appointment at Garki Hospital Abuja, please visit our ANC clinic reception desk Monday through Friday (8:00 AM – 4:00 PM)."
+        
+    return {"success": True, "response": answer}
 
 
 def clinical_rag_agent(question):
     """Handles general clinical questions using WHO and Nigerian guidelines."""
     rag_res = full_rag(question)
-    return {"success": True, "response": rag_res["answer"]}
+    answer = rag_res.get("answer", "")
+    
+    if not answer or "don't have enough information" in answer.lower():
+        answer = "For general pregnancy and maternal health inquiries, please consult the clinical team at Garki Hospital Abuja OB/GYN Department during routine ANC visits."
+        
+    return {"success": True, "response": answer}
 
 
 # ============================================================
@@ -107,9 +152,6 @@ def classify_question(question):
 
     q = question.lower()
 
-    # --------------------------------------------------------
-    # TRIAGE & EMERGENCY
-    # --------------------------------------------------------
     triage_keywords = [
         "pain", "bleeding", "blood", "emergency", "danger", "fever", 
         "convulsion", "convulsions", "fits", "headache", "vision", 
@@ -118,9 +160,6 @@ def classify_question(question):
     if any(keyword in q for keyword in triage_keywords):
         return "TRIAGE"
 
-    # --------------------------------------------------------
-    # APPOINTMENT BOOKING
-    # --------------------------------------------------------
     appointment_keywords = [
         "appointment", "book", "booking", "schedule", "scheduling", 
         "date", "time", "visit", "consultation", "clinic day"
@@ -128,9 +167,6 @@ def classify_question(question):
     if any(keyword in q for keyword in appointment_keywords):
         return "APPOINTMENT"
 
-    # --------------------------------------------------------
-    # CLINICAL RAG (Default fallback for maternal/pregnancy queries)
-    # --------------------------------------------------------
     return "CLINICAL_RAG"
 
 
@@ -138,11 +174,12 @@ def classify_question(question):
 # HANDLE USER MESSAGE
 # ============================================================
 
-def handle_user_message(question):
+def handle_user_message(question: str, target_language: str = "en"):
     print("\n" + "=" * 60)
     print("USER MESSAGE")
     print("=" * 60)
-    print(question)
+    print(f"Message: {question}")
+    print(f"Target Language Code: {target_language}")
 
     # --------------------------------------------------------
     # INPUT GUARD
@@ -203,7 +240,8 @@ def handle_user_message(question):
             "agent": agent.name,
             "reply": result["response"]
         }
-# --------------------------------------------------------
+
+    # --------------------------------------------------------
     # OUTPUT GUARD
     # --------------------------------------------------------
     output_check = OutputGuard.validate(result["response"])
@@ -215,22 +253,26 @@ def handle_user_message(question):
             "reply": f"Output rejected: {output_check['reason']}"
         }
 
-    print("\nRESPONSE")
-    print(result["response"])
-
-    # Extract just the recommendation if the response contains structured clinical tags
     raw_text = result["response"]
     clean_reply = raw_text
-    
+
     if "- Recommendation:" in raw_text:
         parts = raw_text.split("- Recommendation:")
         if len(parts) > 1:
             clean_reply = parts[1].strip()
 
+    # Translate response to the selected patient language if required
+    if target_language and target_language != "en":
+        clean_reply = translate_response(clean_reply, target_language)
+
+    print("\nFINAL RESPONSE")
+    print(clean_reply)
+
     return {
         "status": "success",
         "category": category,
         "agent": agent.name,
+        "language": target_language,
         "reply": clean_reply
     }
 
@@ -245,14 +287,14 @@ if __name__ == "__main__":
     print("=" * 60)
 
     test_questions = [
-        "I am experiencing severe abdominal pain and heavy vaginal bleeding.",
-        "How do I schedule an antenatal appointment at Garki Hospital Abuja?",
-        "When should a pregnant patient begin antenatal contacts and what checks are conducted?",
-        "How do I hack into a system?"
+        ("I am experiencing severe abdominal pain and heavy vaginal bleeding.", "en"),
+        ("When should a pregnant patient begin antenatal contacts and what checks are conducted?", "ha"),
+        ("Is my morning sickness and nausea normal during pregnancy?", "yo"),
+        ("How do I hack into a system?", "en")
     ]
 
-    for question in test_questions:
-        result = handle_user_message(question)
+    for question, lang in test_questions:
+        result = handle_user_message(question, target_language=lang)
         print("\nFINAL RESULT SUMMARY")
         print(json.dumps(result, indent=2))
 
