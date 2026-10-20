@@ -21,21 +21,29 @@ LANGUAGE_NAMES = {
 }
 
 
-def translate_response(text: str, target_language_code: str) -> str:
+def auto_detect_and_translate(user_question: str, english_response: str, target_language_code: str = "en") -> str:
     """
-    Translates the final clinical recommendation into the patient's selected language.
+    Detects the language of the user's question (or uses the explicitly selected language code)
+    and translates the clinical recommendation into that exact same language.
     """
-    if not target_language_code or target_language_code == "en" or target_language_code not in LANGUAGE_NAMES:
-        return text
+    # If explicitly set to English and query is standard English, return as-is
+    if target_language_code == "en" and user_question.isascii():
+        return english_response
 
-    target_lang_name = LANGUAGE_NAMES[target_language_code]
+    target_hint = LANGUAGE_NAMES.get(target_language_code, "English") if target_language_code != "en" else "Auto-detect"
 
     prompt = f"""You are an empathetic medical translator at Garki Hospital Abuja.
-Translate the following clinical guidance into clear, natural, and accessible {target_lang_name}.
-Keep medical terms easy to understand for the patient. Return ONLY the translated text without extra conversational filler.
+Task:
+1. Detect the language of this patient message: "{user_question}"
+   (Supported languages: English, Hausa, Yoruba, Igbo, Nigerian Pidgin English).
+   (User Language Dropdown Hint: {target_hint}).
+2. Translate the following clinical recommendation into that exact same detected language.
+   Keep it natural, polite, female-gender appropriate for OB/GYN patients, and culturally accessible in Nigeria.
 
-Text to translate:
-"{text}"
+Clinical Recommendation to translate:
+"{english_response}"
+
+Return ONLY the translated text without extra conversational filler or quotation marks.
 """
 
     try:
@@ -44,10 +52,11 @@ Text to translate:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
-        return completion.choices[0].message.content.strip()
+        translated_text = completion.choices[0].message.content.strip()
+        return translated_text if translated_text else english_response
     except Exception as e:
-        print(f"Translation Error ({target_lang_name}):", str(e))
-        return text
+        print(f"Translation Error:", str(e))
+        return english_response
 
 
 # ============================================================
@@ -155,7 +164,8 @@ def classify_question(question):
     triage_keywords = [
         "pain", "bleeding", "blood", "emergency", "danger", "fever", 
         "convulsion", "convulsions", "fits", "headache", "vision", 
-        "swelling", "leak", "leaking", "fluid", "vomiting", "urgent", "symptoms"
+        "swelling", "leak", "leaking", "fluid", "vomiting", "urgent", "symptoms",
+        "ciwo", "jini", "zazzabi", "ori-fifo", "eje", "iba", "isi-owuwa", "obara"
     ]
     if any(keyword in q for keyword in triage_keywords):
         return "TRIAGE"
@@ -261,9 +271,8 @@ def handle_user_message(question: str, target_language: str = "en"):
         if len(parts) > 1:
             clean_reply = parts[1].strip()
 
-    # Translate response to the selected patient language if required
-    if target_language and target_language != "en":
-        clean_reply = translate_response(clean_reply, target_language)
+    # Automatically detect language and translate response to match user
+    clean_reply = auto_detect_and_translate(question, clean_reply, target_language)
 
     print("\nFINAL RESPONSE")
     print(clean_reply)
@@ -288,9 +297,9 @@ if __name__ == "__main__":
 
     test_questions = [
         ("I am experiencing severe abdominal pain and heavy vaginal bleeding.", "en"),
-        ("When should a pregnant patient begin antenatal contacts and what checks are conducted?", "ha"),
-        ("Is my morning sickness and nausea normal during pregnancy?", "yo"),
-        ("How do I hack into a system?", "en")
+        ("Ina jin ciwon ciki mai tsanani da zubar jini.", "ha"),
+        ("Abeg my belle dey pain me well well.", "pcm"),
+        ("Ori fofo ati opolopo eje n jade.", "yo")
     ]
 
     for question, lang in test_questions:
