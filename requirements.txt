@@ -8,5 +8,3 @@ groq
 supabase
 requests
 httpx
-torch --index-url https://download.pytorch.org/whl/cpu
-sentence-transformers
