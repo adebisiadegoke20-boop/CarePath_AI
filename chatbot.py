@@ -26,7 +26,6 @@ def auto_detect_and_translate(user_question: str, english_response: str, target_
     Detects the language of the user's question (or uses the explicitly selected language code)
     and translates the clinical recommendation into that exact same language.
     """
-    # If explicitly set to English and query is standard English, return as-is
     if target_language_code == "en" and user_question.isascii():
         return english_response
 
@@ -55,7 +54,7 @@ Return ONLY the translated text without extra conversational filler or quotation
         translated_text = completion.choices[0].message.content.strip()
         return translated_text if translated_text else english_response
     except Exception as e:
-        print(f"Translation Error:", str(e))
+        print("Translation Error:", str(e))
         return english_response
 
 
@@ -77,22 +76,14 @@ def triage_agent(question):
 def appointment_agent(question):
     """Handles Garki Hospital OB/GYN appointment booking inquiries."""
     rag_res = full_rag(question)
-    answer = rag_res.get("answer", "")
-    
-    if not answer or "don't have enough information" in answer.lower():
-        answer = "To inquire about or schedule an OB/GYN appointment at Garki Hospital Abuja, please visit our ANC clinic reception desk Monday through Friday (8:00 AM – 4:00 PM)."
-        
+    answer = rag_res.get("answer", "To schedule an OB/GYN appointment at Garki Hospital Abuja, please visit our clinic reception desk Monday through Friday (8:00 AM – 4:00 PM).")
     return {"success": True, "response": answer}
 
 
 def clinical_rag_agent(question):
     """Handles general clinical questions using WHO and Nigerian guidelines."""
     rag_res = full_rag(question)
-    answer = rag_res.get("answer", "")
-    
-    if not answer or "don't have enough information" in answer.lower():
-        answer = "For general pregnancy and maternal health inquiries, please consult the clinical team at Garki Hospital Abuja OB/GYN Department during routine ANC visits."
-        
+    answer = rag_res.get("answer", "For general inquiries, please consult the clinical team at Garki Hospital Abuja OB/GYN Department.")
     return {"success": True, "response": answer}
 
 
@@ -108,17 +99,16 @@ class Agent:
 
     def run(self, question):
         if self.name == "Triage & Emergency Agent":
-            result = triage_agent(question)
+            return triage_agent(question)
         elif self.name == "Appointment Booking Agent":
-            result = appointment_agent(question)
+            return appointment_agent(question)
         elif self.name == "Clinical Knowledge Agent":
-            result = clinical_rag_agent(question)
+            return clinical_rag_agent(question)
         else:
             return {
                 "success": False,
                 "response": "Unknown agent."
             }
-        return result
 
 
 # ============================================================
@@ -191,13 +181,9 @@ def handle_user_message(question: str, target_language: str = "en"):
     print(f"Message: {question}")
     print(f"Target Language Code: {target_language}")
 
-    # --------------------------------------------------------
-    # INPUT GUARD
-    # --------------------------------------------------------
+    # 1. Input Guard
     input_check = InputGuard.validate(question)
     if not input_check["valid"]:
-        print("\nINPUT GUARD REJECTION:")
-        print(input_check["reason"])
         return {
             "status": "rejected",
             "category": "INVALID",
@@ -205,10 +191,7 @@ def handle_user_message(question: str, target_language: str = "en"):
             "reply": f"Input rejected: {input_check['reason']}"
         }
 
-    # --------------------------------------------------------
-    # CLASSIFICATION
-    # --------------------------------------------------------
-    print("\nSTEP 1: CLASSIFICATION")
+    # 2. Classification
     category = classify_question(question)
     print("Selected category:", category)
 
@@ -220,9 +203,7 @@ def handle_user_message(question: str, target_language: str = "en"):
             "reply": "Input rejected."
         }
 
-    # --------------------------------------------------------
-    # ROUTING
-    # --------------------------------------------------------
+    # 3. Routing
     agent = AGENTS.get(category)
     if not agent:
         return {
@@ -232,18 +213,12 @@ def handle_user_message(question: str, target_language: str = "en"):
             "reply": "Unable to route this question."
         }
 
-    print("\nSTEP 2: ROUTING")
     print("Selected agent:", agent.name)
 
-    # --------------------------------------------------------
-    # AGENT EXECUTION
-    # --------------------------------------------------------
-    print("\nSTEP 3: AGENT EXECUTION")
+    # 4. Agent Execution
     result = agent.run(question)
 
     if not result["success"]:
-        print("\nAGENT ERROR:")
-        print(result["response"])
         return {
             "status": "error",
             "category": category,
@@ -251,9 +226,7 @@ def handle_user_message(question: str, target_language: str = "en"):
             "reply": result["response"]
         }
 
-    # --------------------------------------------------------
-    # OUTPUT GUARD
-    # --------------------------------------------------------
+    # 5. Output Guard
     output_check = OutputGuard.validate(result["response"])
     if not output_check["valid"]:
         return {
@@ -271,7 +244,7 @@ def handle_user_message(question: str, target_language: str = "en"):
         if len(parts) > 1:
             clean_reply = parts[1].strip()
 
-    # Automatically detect language and translate response to match user
+    # Translate if target language is specified
     clean_reply = auto_detect_and_translate(question, clean_reply, target_language)
 
     print("\nFINAL RESPONSE")
@@ -284,30 +257,3 @@ def handle_user_message(question: str, target_language: str = "en"):
         "language": target_language,
         "reply": clean_reply
     }
-
-
-# ============================================================
-# TEST QUESTIONS
-# ============================================================
-
-if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print("CAREPATH MULTI-AGENT SYSTEM TEST")
-    print("=" * 60)
-
-    test_questions = [
-        ("I am experiencing severe abdominal pain and heavy vaginal bleeding.", "en"),
-        ("Ina jin ciwon ciki mai tsanani da zubar jini.", "ha"),
-        ("Abeg my belle dey pain me well well.", "pcm"),
-        ("Ori fofo ati opolopo eje n jade.", "yo")
-    ]
-
-    for question, lang in test_questions:
-        result = handle_user_message(question, target_language=lang)
-        print("\nFINAL RESULT SUMMARY")
-        print(json.dumps(result, indent=2))
-
-    print("\n" + "=" * 60)
-    print("FINAL USAGE SUMMARY")
-    print("=" * 60)
-    print(tracker.summary())
