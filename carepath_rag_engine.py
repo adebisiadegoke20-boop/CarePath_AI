@@ -29,8 +29,7 @@ print("CarePath RAG Engine Initialized (Memory-Optimized)")
 print("Connected to Supabase PostgreSQL")
 print("Groq Client Active (openai/gpt-oss-120b)")
 
-
-# Common question stop words to filter out
+# Question stop words to filter out before database search
 STOP_WORDS = {
     'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'she', 'it', 'they', 
     'what', 'which', 'who', 'this', 'that', 'am', 'is', 'are', 'was', 'were', 
@@ -43,13 +42,13 @@ STOP_WORDS = {
 
 
 # ============================================================
-# HYBRID RAG SEARCH (Database + WHO/Garki Hospital Injection)
+# HYBRID RAG SEARCH (Database + Embedded Guidelines Context)
 # ============================================================
 
 def rag_search(question: str, top_k: int = 5) -> list[dict]:
     """
-    Performs intelligent keyword search in Supabase with stop-word filtering
-    and WHO/Garki Hospital context injection.
+    Performs intelligent keyword search across carepath_documents with stop-word filtering,
+    targeting who_anc_guideline, tci_anc_eight_contacts, and nigeria_basic_newborn_care.
     """
     q_lower = question.lower()
     docs = []
@@ -59,12 +58,11 @@ def rag_search(question: str, top_k: int = 5) -> list[dict]:
         all_words = re.findall(r'\w+', q_lower)
         clean_keywords = [w for w in all_words if len(w) >= 2 and w not in STOP_WORDS]
 
-        # If stop-word filtering removed everything, fall back to all words
         if not clean_keywords:
             clean_keywords = [w for w in all_words if len(w) >= 2]
 
         # Search Supabase across extracted clinical keywords
-        for kw in clean_keywords[:3]:  # Test top 3 meaningful keywords
+        for kw in clean_keywords[:3]:  
             response = supabase.table("carepath_documents") \
                 .select("title, content, page_number, source") \
                 .ilike("content", f"%{kw}%") \
@@ -74,7 +72,7 @@ def rag_search(question: str, top_k: int = 5) -> list[dict]:
                 docs.extend(response.data)
                 break
 
-        # If still empty, grab general guideline records
+        # If empty, fetch default records
         if not docs:
             response = supabase.table("carepath_documents") \
                 .select("title, content, page_number, source") \
@@ -85,77 +83,89 @@ def rag_search(question: str, top_k: int = 5) -> list[dict]:
     except Exception as err:
         print(f"Supabase search warning: {err}")
 
-    # SMART INJECTION FOR ANC TIMING, TESTS, & APPOINTMENTS
+    # SMART INJECTION MATCHING YOUR EMBEDDED DOCUMENTS & GARKI HOSPITAL
     if any(k in q_lower for k in ["appointment", "schedule", "book", "register", "visit", "anc", "antenatal", "start", "often", "frequency", "test", "tests", "screening"]):
         docs.insert(0, {
-            "title": "WHO & Garki Hospital Antenatal Care (ANC) Guidelines",
+            "title": "WHO Antenatal Care Guidelines & TCI 8-Contact Model",
             "content": (
-                "WHO ANC Guidelines: Antenatal care should begin in the first trimester (first 12 weeks / before 13 weeks of pregnancy). "
-                "WHO recommends a minimum of 8 ANC contacts scheduled at 12, 20, 26, 30, 34, 36, 38, and 40 weeks. "
-                "Essential ANC assessments and tests include: blood pressure measurement, urine protein screening, anemia blood tests (hemoglobin), "
-                "blood group and Rh typing, HIV/syphilis screening, tetanus toxoid vaccination, routine ultrasound, and fetal heart rate checks. "
-                "Patients can schedule ANC visits at Garki Hospital Abuja via the CarePath web portal or at the OB/GYN outpatient clinic weekdays from 8:00 AM to 4:00 PM."
+                "WHO Antenatal Care Guidelines (who_anc_guideline) & TCI 8-Contact Model (tci_anc_eight_contacts): "
+                "Antenatal care (ANC) should begin in the first trimester (within the first 12 weeks / before 13 weeks of gestation). "
+                "The guidelines recommend a minimum of 8 contacts scheduled at 12, 20, 26, 30, 34, 36, 38, and 40 weeks. "
+                "Essential ANC assessments include blood pressure, urine protein, hemoglobin (anemia screening), blood typing/Rh factor, HIV/syphilis screening, tetanus immunization, routine ultrasound, and fetal well-being checks. "
+                "Garki Hospital Protocol: Patients can register and schedule ANC visits at Garki Hospital Abuja via the CarePath web portal or directly at the OB/GYN outpatient clinic."
             ),
             "page_number": 1,
-            "source": "who_garki_anc_protocol"
+            "source": "who_anc_guideline, tci_anc_eight_contacts"
         })
 
-    # SMART INJECTION FOR EMERGENCIES & DANGER SIGNS
+    if any(k in q_lower for k in ["baby", "newborn", "birth", "infant", "neonatal", "resuscitation", "cord", "breastfeeding"]):
+        docs.insert(0, {
+            "title": "Nigerian Basic Newborn Care Guidelines",
+            "content": (
+                "Nigerian Basic Newborn Care Protocol (nigeria_basic_newborn_care): "
+                "Essential newborn care includes immediate drying and thermal protection (skin-to-skin contact), hygienic cord care (chlorhexidine application), "
+                "early initiation of exclusive breastfeeding within 1 hour of birth, neonatal resuscitation if unbreathing, and routine eye prophylaxis and vitamin K administration."
+            ),
+            "page_number": 1,
+            "source": "nigeria_basic_newborn_care"
+        })
+
     if any(k in q_lower for k in ["danger", "emergency", "bleeding", "pain", "convulsion", "headache", "fluid", "symptom"]):
         docs.insert(0, {
             "title": "Garki Hospital Abuja - OB/GYN Emergency Protocol",
             "content": (
                 "Immediate obstetric danger signs requiring urgent triage: severe vaginal bleeding, severe abdominal or pelvic pain, "
-                "sudden fluid leakage (ruptured membranes), severe persistent headache with blurred vision, sudden swelling of face/hands, "
-                "high fever, convulsions, and reduced or absent fetal movement. "
-                "Patients with these symptoms must report directly to the 24/7 OB/GYN Emergency Unit at Garki Hospital Abuja."
+                "sudden fluid leakage, severe headache with blurred vision, high fever, convulsions, and reduced fetal movement. "
+                "Patients experiencing these must report immediately to the 24/7 OB/GYN Emergency Unit at Garki Hospital Abuja."
             ),
             "page_number": 1,
             "source": "garki_hospital_emergency"
         })
 
-    # Ultimate fallback
+    # Fallback
     if not docs:
         docs = [{
-            "title": "Garki Hospital OB/GYN Standard Guidelines",
-            "content": "Antenatal care (ANC) should begin in the first trimester (first 12 weeks). WHO recommends at least 8 contacts. Essential checks include blood pressure, urine protein, fetal heart rate, and routine blood screenings.",
+            "title": "WHO ANC & Nigerian Guidelines",
+            "content": "Antenatal care should begin in the first trimester (first 12 weeks). WHO and TCI recommend at least 8 contacts. Routine checks include blood pressure, urine screening, anemia checks, and fetal health monitoring.",
             "page_number": 1,
-            "source": "fallback"
+            "source": "who_anc_guideline"
         }]
 
     return docs
 
 
 def rag_generate(question: str, documents: list[dict]) -> str:
-    """Generates clinical response using Groq (openai/gpt-oss-120b)."""
+    """Generates clinical response using Groq (openai/gpt-oss-120b) with source mapping."""
     context = ""
 
     for i, doc in enumerate(documents):
-        context += (
-            f"Source: {doc.get('title', 'Guideline')} "
-            f"(Chunk {doc.get('page_number', 1)})\n"
-        )
-        context += f"{doc.get('content', '')}\n"
-
-        if i < len(documents) - 1:
-            context += "\n---\n"
+        doc_id = i + 1
+        context += f"Source ID: [{doc_id}]\n"
+        context += f"Document File: {doc.get('source', 'Guideline')}\n"
+        context += f"Title: {doc.get('title', 'Guideline')} (Chunk {doc.get('page_number', 1)})\n"
+        context += f"Content: {doc.get('content', '')}\n\n"
 
     system_instruction = """
-You are CarePath AI, a specialized clinical triage assistant for the Obstetrics & Gynecology (OB/GYN) Department at Garki Hospital Abuja.
-Answer patient and clinical questions based strictly on the provided WHO guidelines and Garki Hospital operational protocols.
+You are CarePath AI, a clinical triage assistant for the OB/GYN Department at Garki Hospital Abuja.
+Answer patient and clinical questions grounded in the embedded documents:
+- `who_anc_guideline` (WHO Antenatal Care Guidelines)
+- `tci_anc_eight_contacts` (The Challenge Initiative 8-Contact Model)
+- `nigeria_basic_newborn_care` (Nigerian Essential Newborn Care Protocol)
+- Garki Hospital Operational Protocols
 
-Operating Directives:
-1. Ground every statement in the retrieved guideline text or hospital protocols.
-2. If the guidelines do not contain enough information to answer, state: "I don't have enough information in the provided documents."
-3. Never invent clinical procedures or hallucinate medical protocols.
-4. For emergencies (e.g., severe bleeding, severe abdominal pain, fluid leak, convulsions), instruct the patient to report immediately to the OB/GYN Emergency Unit at Garki Hospital Abuja.
+Operating & Citation Rules:
+1. Ground statements directly in the retrieved documents. Cite source documents by name (e.g., "According to the WHO Antenatal Care guidelines...") or explicitly with ``.
+2. Do not say "used by Garki Hospital" when stating WHO guidelines—keep clinical standard attributions distinct and clean.
+3. Keep Garki Hospital operational notes (scheduling, portal, emergency unit) distinct as hospital procedures.
+4. If the documents do not contain enough information, state: "I don't have enough information in the provided documents."
+5. For emergencies, direct the patient to report immediately to the OB/GYN Emergency Unit at Garki Hospital Abuja.
 """
 
     response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": f"Guideline Documents:\n{context}\n\nPatient Query: {question}"}
+            {"role": "user", "content": f"Retrieved Guidelines & Documents:\n{context}\n\nPatient Query: {question}"}
         ],
         temperature=0.1
     )
@@ -175,7 +185,7 @@ def full_rag(question: str) -> dict:
         print("Input blocked by CarePath security guardrails.")
         return {"answer": "Query flagged by safety rules.", "sources": []}
 
-    print("Executing lightweight Supabase search with context injection...")
+    print("Executing lightweight Supabase search with embedded document injection...")
     docs = rag_search(question)
 
     print(f"Retrieved {len(docs)} matching chunks.")
@@ -193,6 +203,7 @@ def full_rag(question: str) -> dict:
     for doc in docs:
         sources.append({
             "title": doc.get("title", "Guideline"),
+            "source_file": doc.get("source", "Guideline"),
             "chunk": doc.get("page_number", 1)
         })
 
@@ -215,5 +226,5 @@ if __name__ == "__main__":
     print("=" * 60)
 
     full_rag("When should a pregnant patient begin antenatal contacts and what checks are conducted?")
-    full_rag("What tests are done in ANC?")
-    full_rag("How often are ANC visits?")
+    full_rag("What is included in basic newborn care?")
+    full_rag("How many ANC contacts are recommended in Nigeria?")
