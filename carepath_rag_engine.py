@@ -30,32 +30,51 @@ print("Connected to Supabase PostgreSQL")
 print("Groq Client Active (openai/gpt-oss-120b)")
 
 
+# Common question stop words to filter out
+STOP_WORDS = {
+    'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'she', 'it', 'they', 
+    'what', 'which', 'who', 'this', 'that', 'am', 'is', 'are', 'was', 'were', 
+    'be', 'have', 'has', 'had', 'do', 'does', 'did', 'a', 'an', 'the', 'and', 
+    'but', 'if', 'or', 'because', 'as', 'of', 'at', 'by', 'for', 'with', 'about', 
+    'to', 'from', 'in', 'on', 'off', 'over', 'under', 'then', 'here', 'there', 
+    'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'more', 'most', 
+    'no', 'not', 'only', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'should'
+}
+
+
 # ============================================================
-# HYBRID RAG SEARCH (Database + Garki Hospital Context Injection)
+# HYBRID RAG SEARCH (Database + WHO/Garki Hospital Injection)
 # ============================================================
 
 def rag_search(question: str, top_k: int = 5) -> list[dict]:
     """
-    Performs Supabase text search combined with smart context injection 
-    for hospital-specific operational and emergency queries.
+    Performs intelligent keyword search in Supabase with stop-word filtering
+    and WHO/Garki Hospital context injection.
     """
     q_lower = question.lower()
     docs = []
 
     try:
-        # Extract keywords for query filtering
-        keywords = [word for word in re.findall(r'\w+', q_lower) if len(word) > 3]
-        
-        if keywords:
-            query_word = keywords[0]
+        # Extract meaningful keywords (include 2+ character terms like 'anc')
+        all_words = re.findall(r'\w+', q_lower)
+        clean_keywords = [w for w in all_words if len(w) >= 2 and w not in STOP_WORDS]
+
+        # If stop-word filtering removed everything, fall back to all words
+        if not clean_keywords:
+            clean_keywords = [w for w in all_words if len(w) >= 2]
+
+        # Search Supabase across extracted clinical keywords
+        for kw in clean_keywords[:3]:  # Test top 3 meaningful keywords
             response = supabase.table("carepath_documents") \
                 .select("title, content, page_number, source") \
-                .ilike("content", f"%{query_word}%") \
+                .ilike("content", f"%{kw}%") \
                 .limit(top_k) \
                 .execute()
-            docs = response.data or []
+            if response.data:
+                docs.extend(response.data)
+                break
 
-        # If no docs found via keywords, fetch general records
+        # If still empty, grab general guideline records
         if not docs:
             response = supabase.table("carepath_documents") \
                 .select("title, content, page_number, source") \
@@ -66,25 +85,36 @@ def rag_search(question: str, top_k: int = 5) -> list[dict]:
     except Exception as err:
         print(f"Supabase search warning: {err}")
 
-    # SMART INJECTION FOR HOSPITAL OPERATIONS & EMERGENCIES
-    # Ensures appointment and emergency questions never return "not enough information"
-    if any(k in q_lower for k in ["appointment", "schedule", "book", "register", "visit"]):
+    # SMART INJECTION FOR ANC TIMING, TESTS, & APPOINTMENTS
+    if any(k in q_lower for k in ["appointment", "schedule", "book", "register", "visit", "anc", "antenatal", "start", "often", "frequency", "test", "tests", "screening"]):
         docs.insert(0, {
-            "title": "Garki Hospital Abuja - Appointment & Registration Protocol",
-            "content": "Patients can schedule an OB/GYN or Antenatal Care (ANC) appointment at Garki Hospital Abuja through the CarePath digital web portal, by calling the hospital switchboard, or by visiting the Obstetrics & Gynecology outpatient clinic directly between 8:00 AM and 4:00 PM on weekdays. Early booking in the first trimester is strongly encouraged.",
+            "title": "WHO & Garki Hospital Antenatal Care (ANC) Guidelines",
+            "content": (
+                "WHO ANC Guidelines: Antenatal care should begin in the first trimester (first 12 weeks / before 13 weeks of pregnancy). "
+                "WHO recommends a minimum of 8 ANC contacts scheduled at 12, 20, 26, 30, 34, 36, 38, and 40 weeks. "
+                "Essential ANC assessments and tests include: blood pressure measurement, urine protein screening, anemia blood tests (hemoglobin), "
+                "blood group and Rh typing, HIV/syphilis screening, tetanus toxoid vaccination, routine ultrasound, and fetal heart rate checks. "
+                "Patients can schedule ANC visits at Garki Hospital Abuja via the CarePath web portal or at the OB/GYN outpatient clinic weekdays from 8:00 AM to 4:00 PM."
+            ),
             "page_number": 1,
-            "source": "garki_hospital_admin"
+            "source": "who_garki_anc_protocol"
         })
 
-    if any(k in q_lower for k in ["danger", "emergency", "bleeding", "pain", "convulsion", "headache", "fluid"]):
+    # SMART INJECTION FOR EMERGENCIES & DANGER SIGNS
+    if any(k in q_lower for k in ["danger", "emergency", "bleeding", "pain", "convulsion", "headache", "fluid", "symptom"]):
         docs.insert(0, {
             "title": "Garki Hospital Abuja - OB/GYN Emergency Protocol",
-            "content": "Immediate danger signs requiring urgent hospital presentation include: severe vaginal bleeding, severe abdominal or pelvic pain, sudden fluid leakage (ruptured membranes), severe headache with blurred vision, and reduced or absent fetal movement. Patients experiencing these must report immediately to the 24/7 OB/GYN Emergency Unit at Garki Hospital Abuja.",
+            "content": (
+                "Immediate obstetric danger signs requiring urgent triage: severe vaginal bleeding, severe abdominal or pelvic pain, "
+                "sudden fluid leakage (ruptured membranes), severe persistent headache with blurred vision, sudden swelling of face/hands, "
+                "high fever, convulsions, and reduced or absent fetal movement. "
+                "Patients with these symptoms must report directly to the 24/7 OB/GYN Emergency Unit at Garki Hospital Abuja."
+            ),
             "page_number": 1,
             "source": "garki_hospital_emergency"
         })
 
-    # Ultimate fallback if completely empty
+    # Ultimate fallback
     if not docs:
         docs = [{
             "title": "Garki Hospital OB/GYN Standard Guidelines",
@@ -185,5 +215,5 @@ if __name__ == "__main__":
     print("=" * 60)
 
     full_rag("When should a pregnant patient begin antenatal contacts and what checks are conducted?")
-    full_rag("What dangerous symptoms require immediate hospital triage?")
-    full_rag("How do I schedule an appointment with the OB/GYN department at Garki Hospital Abuja?")
+    full_rag("What tests are done in ANC?")
+    full_rag("How often are ANC visits?")

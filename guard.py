@@ -35,7 +35,7 @@ class InputGuard:
 class OutputGuard:
     """Validates LLM output before showing it to the user."""
     PROHIBITED_PHRASES = ["I guarantee", "I promise", "100%", "definitely safe", "no risk"]
-    MAX_RESPONSE_LENGTH = 3000
+    MAX_RESPONSE_LENGTH = 8000  # Increased to allow detailed WHO clinical outputs
 
     @classmethod
     def validate(cls, ai_response, expected_format=None):
@@ -55,8 +55,6 @@ class OutputGuard:
                 return {"valid": False, "reason": "Response is not valid JSON"}
                 
         return {"valid": True, "reason": None}
-
-
 # ============================================================
 # COST & TOKEN TRACKER
 # ============================================================
