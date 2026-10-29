@@ -7,7 +7,7 @@
 
 This project was built by **Logic League Team** as part of our intensive learning journey in the **NECA ICT Academy / ITF Advanced AI Automation Engineer Programme**.
 
-For this project, our team designed and deployed **CarePath AI**—a specialized multi-AI agent system engineered to provide automated clinical triage, maternal guidance, and appointment routing for the **Obstetrics & Gynecology (OB/GYN) Department at Garki Hospital Abuja**. 
+For this project, our team designed and deployed **CarePath AI** a specialized multi-AI agent system engineered to provide automated clinical triage, maternal guidance, and appointment routing for the **Obstetrics & Gynecology (OB/GYN) Department at Garki Hospital Abuja**. 
 
 Instead of relying on a single general-purpose AI model that risks hallucinations or generic advice, we created a modular multi-agent architecture where specialized agents handle distinct clinical and administrative tasks. The system grounds all medical advice strictly in verified healthcare guidelines (such as WHO Antenatal Care Protocols and Nigerian National Basic Newborn Care Guidelines) while enabling zero-barrier access via standard **Twilio SMS** for patients without internet connectivity or smartphones.
 
@@ -80,7 +80,7 @@ Response Delivery: The formatted assessment is delivered back to the frontend AP
 Backend API Health Check: https://carepath-ai-x8qu.onrender.com/
 Interactive API Documentation (Swagger): https://carepath-ai-x8qu.onrender.com/docs
 Twilio SMS Endpoint: https://carepath-ai-x8qu.onrender.com/sms
-Bolt:
+Bolt:https://carepath-ai-obgyn-fr-wftb.bolt.host/
 
 Frontend Web Application: Deploying via Bolt.new
 
@@ -112,7 +112,6 @@ Environment Variables Security
 Never commit your .env file, API keys, or database credentials to GitHub. Always ensure .env is properly declared in your .gitignore file.
 
 **Learning Outcomes & Project Importance**
-What I Learned Building This Project
 Multi-Agent Orchestration: Gained hands-on experience designing modular AI workflows where specialized agents handle distinct domain tasks (triage, scheduling, reminders, and security) rather than relying on a monolithic prompt.
 
 Production RAG Implementation: Learned how to connect vector embeddings with Supabase (pgvector) to anchor generative AI responses in verified medical literature, effectively mitigating model hallucinations.
